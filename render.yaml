@@ -1,0 +1,29 @@
+services:
+  # ── Backend (FastAPI) ────────────────────────────────────────────────────────
+  - type: web
+    name: po-converter-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+
+  # ── Frontend (Streamlit) ─────────────────────────────────────────────────────
+  - type: web
+    name: po-converter-frontend
+    runtime: docker
+    dockerfilePath: ./Dockerfile.frontend
+    plan: starter
+    envVars:
+      - key: API_URL
+        sync: false   # Set this to https://po-converter-backend.onrender.com after backend is deployed

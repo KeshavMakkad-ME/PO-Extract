@@ -1,0 +1,13 @@
+# Secrets — never commit these
+.env
+*.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Output files — but keep the template
+*.xlsx
+!templates/Finance_XLSX_Templates_new_new.xlsx
