@@ -1,9 +1,13 @@
 import os
+from pathlib import Path
 
+from dotenv import load_dotenv
 import requests
 import streamlit as st
 
-API_URL = os.environ.get("API_URL", "http://localhost:8000")
+load_dotenv(Path(__file__).parent / ".env")
+
+API_URL = os.environ.get("API_URL", "http://localhost:8000").rstrip("/")
 
 
 @st.cache_data(ttl=300)
