@@ -12,3 +12,6 @@ __pycache__/
 # Output files — but keep the template
 *.xlsx
 !templates/Finance_XLSX_Templates_new_new.xlsx
+
+
+*.ps1

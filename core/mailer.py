@@ -1,24 +1,30 @@
+import base64
 import logging
 import os
-import smtplib
-from email.mime.application import MIMEApplication
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+
+import resend
 
 logger = logging.getLogger(__name__)
 
 
-def _smtp_connection():
-    host     = os.environ["SMTP_HOST"]
-    port     = int(os.environ.get("SMTP_PORT", 587))
-    user     = os.environ["SMTP_USER"]
-    password = os.environ["SMTP_PASSWORD"]
+def _send(to: str, subject: str, body: str, xlsx_bytes: bytes | None = None) -> None:
+    resend.api_key = os.environ["RESEND_API_KEY"]
+    sender = os.environ.get("EMAIL_FROM", "finance@doveriye.com")
 
-    server = smtplib.SMTP(host, port)
-    server.ehlo()
-    server.starttls()
-    server.login(user, password)
-    return server, user
+    params: dict = {
+        "from": sender,
+        "to":   [to],
+        "subject": subject,
+        "text": body,
+    }
+
+    if xlsx_bytes:
+        params["attachments"] = [{
+            "filename": "e_invoice_output.xlsx",
+            "content":  base64.b64encode(xlsx_bytes).decode(),
+        }]
+
+    resend.Emails.send(params)
 
 
 def send_result_email(
@@ -28,13 +34,6 @@ def send_result_email(
     total_line_items: int,
     errors: list[str],
 ) -> None:
-    server, sender = _smtp_connection()
-
-    msg = MIMEMultipart()
-    msg["From"]    = sender
-    msg["To"]      = recipient
-    msg["Subject"] = f"E-Invoice Ready — {successful} PO(s), {total_line_items} line item(s)"
-
     error_section = ""
     if errors:
         error_lines = "\n".join(f"  • {e}" for e in errors)
@@ -50,25 +49,17 @@ def send_result_email(
         f"The XLSX is attached. Upload it directly to the GST portal.\n\n"
         f"— PO Converter"
     )
-    msg.attach(MIMEText(body, "plain"))
 
-    attachment = MIMEApplication(xlsx_bytes, _subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    attachment.add_header("Content-Disposition", "attachment", filename="e_invoice_output.xlsx")
-    msg.attach(attachment)
-
-    server.sendmail(sender, recipient, msg.as_string())
-    server.quit()
+    _send(
+        to=recipient,
+        subject=f"E-Invoice Ready — {successful} PO(s), {total_line_items} line item(s)",
+        body=body,
+        xlsx_bytes=xlsx_bytes,
+    )
     logger.info(f"Result email sent to {recipient}")
 
 
 def send_error_email(recipient: str, errors: list[str]) -> None:
-    server, sender = _smtp_connection()
-
-    msg = MIMEMultipart()
-    msg["From"]    = sender
-    msg["To"]      = recipient
-    msg["Subject"] = "E-Invoice Processing Failed"
-
     error_lines = "\n".join(f"  • {e}" for e in errors)
     body = (
         f"Hi,\n\n"
@@ -77,8 +68,10 @@ def send_error_email(recipient: str, errors: list[str]) -> None:
         f"Please check the files and try again.\n\n"
         f"— PO Converter"
     )
-    msg.attach(MIMEText(body, "plain"))
 
-    server.sendmail(sender, recipient, msg.as_string())
-    server.quit()
+    _send(
+        to=recipient,
+        subject="E-Invoice Processing Failed",
+        body=body,
+    )
     logger.info(f"Error email sent to {recipient}")

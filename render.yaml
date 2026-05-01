@@ -9,14 +9,10 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: "587"
-      - key: SMTP_USER
+      - key: RESEND_API_KEY
         sync: false
-      - key: SMTP_PASSWORD
-        sync: false
+      - key: EMAIL_FROM
+        value: finance@doveriye.com
 
   # ── Frontend (Streamlit) ─────────────────────────────────────────────────────
   - type: web
@@ -26,4 +22,4 @@ services:
     plan: starter
     envVars:
       - key: API_URL
-        sync: false   # Set this to https://po-converter-backend.onrender.com after backend is deployed
+        sync: false   # Set to https://po-converter-backend.onrender.com
