@@ -11,6 +11,7 @@ from core.extractor import extract_text_from_csv, extract_text_from_pdf
 from core.gemini_client import extract_po_fields
 from core.mailer import send_error_email, send_invoice_email
 from core.xlsx_builder import build_xlsx
+from utils.gsheet import load_field_config
 
 logger = logging.getLogger(__name__)
 
@@ -94,13 +95,23 @@ async def process_files(
     request: Request,
     background_tasks: BackgroundTasks,
     files: UploadedFiles,
-    dispatch_from_idx: int = Form(0),
+    dispatch_from_idx: int = Form(...),
     recipient_email: str   = Form(...),
+    company: str           = Form("blinkit"),
 ) -> AckResponse:
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
     if len(files) > MAX_FILES:
         raise HTTPException(status_code=400, detail=f"Maximum {MAX_FILES} files allowed per request")
+
+    dispatch_options = request.app.state.dispatch_options
+    if not dispatch_options:
+        raise HTTPException(status_code=503, detail="Dispatch locations not loaded — try again shortly")
+    if dispatch_from_idx < 0 or dispatch_from_idx >= len(dispatch_options):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid dispatch location (index {dispatch_from_idx})",
+        )
 
     file_items: list[tuple[str, bytes]] = []
     skipped: list[str] = []
@@ -116,14 +127,14 @@ async def process_files(
     if not file_items:
         raise HTTPException(status_code=400, detail="No supported files (PDF or CSV) found in upload")
 
-    dispatch_options = request.app.state.dispatch_options
-    dispatch_from    = dispatch_options[dispatch_from_idx] if dispatch_options else {}
-    recipients       = _build_recipients(recipient_email)
+    dispatch_from = dispatch_options[dispatch_from_idx]
+    recipients    = _build_recipients(recipient_email)
+    config_df     = load_field_config(company)
 
     background_tasks.add_task(
         _process_and_email,
         file_items,
-        request.app.state.config_df,
+        config_df,
         request.app.state.state_codes,
         dispatch_from,
         request.app.state.model,

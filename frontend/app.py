@@ -29,10 +29,69 @@ def fetch_dispatch_options() -> list[dict]:
 
 
 def _init_state():
-    if "uploader_key" not in st.session_state:
-        st.session_state.uploader_key = 0
-    if "submitted" not in st.session_state:
-        st.session_state.submitted = None  # dict with message info after submit
+    defaults = {
+        "uploader_key": 0,
+        "submitted": None,
+        "is_loading": False,
+        "pending_submission": None,
+        "submit_error": None,
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+
+def _do_submission() -> None:
+    pending = st.session_state.pending_submission
+    try:
+        files_payload = [
+            ("files", (name, data, mime))
+            for name, data, mime in pending["files"]
+        ]
+        logger.info(
+            f"Submitting {pending['count']} file(s) to {API_URL}/process"
+            f" — recipient: {pending['email']}"
+        )
+        response = requests.post(
+            f"{API_URL}/process",
+            files=files_payload,
+            data={
+                "dispatch_from_idx": pending["dispatch_idx"],
+                "recipient_email":   pending["email"],
+                "company":           pending["company"],
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        data = response.json()
+        logger.info(f"Submission accepted — {data.get('message', '')}")
+        st.session_state.submitted    = {
+            "email":   pending["email"],
+            "message": data.get("message", ""),
+            "count":   pending["count"],
+        }
+        st.session_state.submit_error = None
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Connection error — {API_URL}: {e}")
+        st.session_state.submit_error = (
+            "Cannot reach the backend. Make sure the server is running on port 8000."
+        )
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Request timed out — {API_URL}: {e}")
+        st.session_state.submit_error = "Request timed out."
+    except requests.exceptions.HTTPError as exc:
+        try:
+            detail = exc.response.json().get("detail", str(exc))
+        except Exception:
+            detail = str(exc)
+        logger.error(f"HTTP error from {API_URL}: {detail}")
+        st.session_state.submit_error = f"Server error: {detail}"
+    except Exception as exc:
+        logger.error(f"Unexpected error: {exc}")
+        st.session_state.submit_error = f"Unexpected error: {exc}"
+    finally:
+        st.session_state.is_loading        = False
+        st.session_state.pending_submission = None
 
 
 def main():
@@ -100,7 +159,7 @@ def main():
 
         if not dispatch_options:
             st.warning("Could not load dispatch locations — is the backend running?")
-            dispatch_idx = 0
+            dispatch_idx = None
         else:
             labels = [
                 f"{opt.get('Location', 'Unknown')}  ·  {opt.get('name', '')}"
@@ -121,6 +180,17 @@ def main():
         recipient_email = st.text_input(
             "Send results to",
             placeholder="you@company.com",
+            label_visibility="collapsed",
+        )
+
+        st.divider()
+
+        # ── PO Source ───────────────────────────────────────────────────────────
+        st.subheader("PO Source")
+        company = st.selectbox(
+            "PO Source",
+            options=["blinkit", "flipkart"],
+            format_func=lambda x: x.capitalize(),
             label_visibility="collapsed",
         )
 
@@ -151,78 +221,71 @@ def main():
         st.divider()
 
         # ── Submit ──────────────────────────────────────────────────────────────
-        ready = bool(uploaded_files and recipient_email and recipient_email.strip())
+        ready = bool(
+            uploaded_files
+            and recipient_email
+            and recipient_email.strip()
+            and dispatch_idx is not None
+        )
         submit_btn = st.button(
             "Process & Email Results",
             type="primary",
-            disabled=not ready,
+            disabled=not ready or st.session_state.is_loading,
             use_container_width=True,
         )
 
         if submit_btn and ready:
-            logger.info(f"Submitting {len(uploaded_files)} file(s) to {API_URL}/process — recipient: {recipient_email.strip()}")
-            with st.spinner(f"Submitting {len(uploaded_files)} file(s)…"):
-                try:
-                    files_payload = [
-                        ("files", (f.name, f.read(), "application/octet-stream"))
-                        for f in uploaded_files
-                    ]
-                    response = requests.post(
-                        f"{API_URL}/process",
-                        files=files_payload,
-                        data={
-                            "dispatch_from_idx": dispatch_idx,
-                            "recipient_email":   recipient_email.strip(),
-                        },
-                        timeout=60,
-                    )
-                    response.raise_for_status()
-                    data = response.json()
-                    logger.info(f"Submission accepted — {data.get('message', '')}")
-                    st.session_state.submitted = {
-                        "email":   recipient_email.strip(),
-                        "message": data.get("message", ""),
-                        "count":   len(uploaded_files),
-                    }
-                    st.session_state.uploader_key += 1
-                    st.rerun()
-
-                except requests.exceptions.ConnectionError as e:
-                    logger.error(f"Connection error — {API_URL}: {e}")
-                    st.error("Cannot reach the backend. Make sure the server is running on port 8000.")
-                except requests.exceptions.Timeout as e:
-                    logger.error(f"Request timed out — {API_URL}: {e}")
-                    st.error("Request timed out.")
-                except requests.exceptions.HTTPError as exc:
-                    try:
-                        detail = exc.response.json().get("detail", str(exc))
-                    except Exception:
-                        detail = str(exc)
-                    logger.error(f"HTTP error from {API_URL}: {detail}")
-                    st.error(f"Server error: {detail}")
-                except Exception as exc:
-                    logger.error(f"Unexpected error: {exc}")
-                    st.error(f"Unexpected error: {exc}")
+            st.session_state.pending_submission = {
+                "files": [
+                    (f.name, f.read(), "application/octet-stream")
+                    for f in uploaded_files
+                ],
+                "dispatch_idx": dispatch_idx,
+                "email":        recipient_email.strip(),
+                "company":      company,
+                "count":        len(uploaded_files),
+            }
+            st.session_state.is_loading   = True
+            st.session_state.submit_error = None
+            st.session_state.uploader_key += 1
+            st.rerun()
 
     with right:
         # ── Status panel ────────────────────────────────────────────────────────
         st.subheader("Status")
 
-        sub = st.session_state.submitted
-        if sub is None:
-            st.markdown(
-                "<div style='color:#adb5bd; margin-top:3rem; text-align:center;'>"
-                "Upload files and submit to get started."
-                "</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.success(f"Submitted — {sub['count']} file(s) queued for processing.")
-            st.info(f"Results will be emailed to **{sub['email']}**.\n\nThis usually takes 1–3 minutes depending on the number of files.")
+        if st.session_state.is_loading:
+            pending = st.session_state.pending_submission
+            count   = pending["count"] if pending else "your"
+            with st.spinner(f"Submitting {count} file(s)… please wait."):
+                _do_submission()
+            st.rerun()
 
-            if st.button("Submit another batch", use_container_width=True):
-                st.session_state.submitted = None
+        elif st.session_state.submit_error:
+            st.error(st.session_state.submit_error)
+            if st.button("Dismiss", use_container_width=True):
+                st.session_state.submit_error = None
                 st.rerun()
+
+        else:
+            sub = st.session_state.submitted
+            if sub is None:
+                st.markdown(
+                    "<div style='color:#adb5bd; margin-top:3rem; text-align:center;'>"
+                    "Upload files and submit to get started."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.success(f"Submitted — {sub['count']} file(s) queued for processing.")
+                st.info(
+                    f"Results will be emailed to **{sub['email']}**.\n\n"
+                    "This usually takes 1–3 minutes depending on the number of files."
+                )
+
+                if st.button("Submit another batch", use_container_width=True):
+                    st.session_state.submitted = None
+                    st.rerun()
 
 
 if __name__ == "__main__":

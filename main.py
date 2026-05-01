@@ -9,7 +9,7 @@ load_dotenv()
 
 from api.router import router
 from core.gemini_client import get_openai_client
-from utils.gsheet import load_dispatch_options, load_field_config, load_state_codes
+from utils.gsheet import load_dispatch_options, load_state_codes
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Initializing — loading config, state codes, dispatch options, and OpenAI client...")
     app.state.model            = get_openai_client()
-    app.state.config_df        = load_field_config()
     app.state.state_codes      = load_state_codes()
     app.state.dispatch_options = load_dispatch_options()
     logger.info("Ready to serve requests")

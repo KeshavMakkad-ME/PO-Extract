@@ -10,18 +10,21 @@ logger = logging.getLogger(__name__)
 TEMPLATE_PATH = os.environ.get("TEMPLATE_PATH", "templates/Finance_XLSX_Templates_new_new.xlsx")
 
 
-def load_field_config() -> pd.DataFrame:
-    wb = openpyxl.load_workbook(TEMPLATE_PATH, read_only=True, data_only=True)
-    ws = wb["field_config"]
-
-    rows = list(ws.iter_rows(values_only=True))
-    headers = [str(h) for h in rows[0]]
-    data = [[str(v) if v is not None else "" for v in row] for row in rows[1:]]
+def load_field_config(company: str = "blinkit") -> pd.DataFrame:
+    sheet_map = {
+        "blinkit":  "field_config_blinkit",
+        "flipkart": "field_config_flipkart",
+    }
+    sheet_name = sheet_map.get(company.lower(), "field_config_blinkit")
+    wb         = openpyxl.load_workbook(TEMPLATE_PATH, read_only=True, data_only=True)
+    ws         = wb[sheet_name]
+    rows       = list(ws.iter_rows(values_only=True))
     wb.close()
-
-    df = pd.DataFrame(data, columns=headers)
-    df = df[df["field_name"].notna() & (df["field_name"] != "")].reset_index(drop=True)
-    logger.info(f"Loaded field_config: {len(df)} fields from template")
+    headers    = [str(h) for h in rows[0]]
+    data       = [[str(v) if v is not None else "" for v in row] for row in rows[1:]]
+    df         = pd.DataFrame(data, columns=headers)
+    df         = df[df["field_name"].notna() & (df["field_name"] != "")].reset_index(drop=True)
+    logger.info(f"Loaded {sheet_name}: {len(df)} fields")
     return df
 
 
