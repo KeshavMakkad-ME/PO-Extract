@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -5,9 +6,16 @@ from dotenv import load_dotenv
 import requests
 import streamlit as st
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 load_dotenv(Path(__file__).parent / ".env")
 
 API_URL = os.environ.get("API_URL", "http://localhost:8000").rstrip("/")
+logger.info(f"Frontend starting — API_URL: {API_URL}")
 
 
 @st.cache_data(ttl=300)
@@ -58,6 +66,24 @@ def main():
         }
     </style>
     """, unsafe_allow_html=True)
+
+    # ── Sidebar: connection status ──────────────────────────────────────────────
+    with st.sidebar:
+        st.caption("Backend")
+        st.code(API_URL, language=None)
+        try:
+            r = requests.get(f"{API_URL}/health", timeout=5)
+            r.raise_for_status()
+            health = r.json()
+            if health.get("ready"):
+                st.success("Connected & ready")
+                logger.info(f"Health check OK — {API_URL} is ready")
+            else:
+                st.warning("Connected but not ready")
+                logger.warning(f"Health check — {API_URL} responded but not ready: {health}")
+        except Exception as e:
+            st.error(f"Unreachable — {e}")
+            logger.error(f"Health check failed — {API_URL}: {e}")
 
     # ── Header ─────────────────────────────────────────────────────────────────
     st.title("PO → E-Invoice Converter")
@@ -134,6 +160,7 @@ def main():
         )
 
         if submit_btn and ready:
+            logger.info(f"Submitting {len(uploaded_files)} file(s) to {API_URL}/process — recipient: {recipient_email.strip()}")
             with st.spinner(f"Submitting {len(uploaded_files)} file(s)…"):
                 try:
                     files_payload = [
@@ -151,6 +178,7 @@ def main():
                     )
                     response.raise_for_status()
                     data = response.json()
+                    logger.info(f"Submission accepted — {data.get('message', '')}")
                     st.session_state.submitted = {
                         "email":   recipient_email.strip(),
                         "message": data.get("message", ""),
@@ -159,17 +187,21 @@ def main():
                     st.session_state.uploader_key += 1
                     st.rerun()
 
-                except requests.exceptions.ConnectionError:
+                except requests.exceptions.ConnectionError as e:
+                    logger.error(f"Connection error — {API_URL}: {e}")
                     st.error("Cannot reach the backend. Make sure the server is running on port 8000.")
-                except requests.exceptions.Timeout:
+                except requests.exceptions.Timeout as e:
+                    logger.error(f"Request timed out — {API_URL}: {e}")
                     st.error("Request timed out.")
                 except requests.exceptions.HTTPError as exc:
                     try:
                         detail = exc.response.json().get("detail", str(exc))
                     except Exception:
                         detail = str(exc)
+                    logger.error(f"HTTP error from {API_URL}: {detail}")
                     st.error(f"Server error: {detail}")
                 except Exception as exc:
+                    logger.error(f"Unexpected error: {exc}")
                     st.error(f"Unexpected error: {exc}")
 
     with right:

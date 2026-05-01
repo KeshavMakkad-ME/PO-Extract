@@ -9,10 +9,12 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
-      - key: RESEND_API_KEY
+      - key: APPS_SCRIPT_URL
         sync: false
-      - key: EMAIL_FROM
-        value: finance@doveriye.com
+      - key: MAILER_API_KEY
+        sync: false
+      - key: FINANCE_EMAILS
+        sync: false   # optional: comma-separated always-CC list
 
   # ── Frontend (Streamlit) ─────────────────────────────────────────────────────
   - type: web
