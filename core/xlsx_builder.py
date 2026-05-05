@@ -102,7 +102,7 @@ def build_xlsx(
         po_result["ship_to_trade_name"] = po_result.get("party_trade_name", "")
         po_result["ship_to_state"]      = po_result.get("party_state", "")
         po_result["party_address2"]     = _get_address2(po_result.get("party_address1", ""))
-        po_result["ship_to_address2"]   = po_result.get("party_address2", "")
+        po_result["ship_to_address2"]   = _get_address2(po_result.get("ship_to_address1", ""))
 
         line_items = po_result.get("line_items", [])
         if not line_items:
