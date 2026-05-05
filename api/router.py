@@ -9,6 +9,7 @@ from api.requests import ALLOWED_EXTENSIONS, MAX_FILES, UploadedFiles
 from api.responses import AckResponse, HealthResponse
 from core.extractor import extract_text_from_csv, extract_text_from_pdf
 from core.gemini_client import extract_po_fields
+from core.verifier import verify_extraction
 from core.mailer import send_error_email, send_invoice_email
 from core.xlsx_builder import build_xlsx
 from utils.gsheet import load_field_config
@@ -50,6 +51,11 @@ def _process_and_email(
                 else extract_text_from_csv(file_bytes)
             )
             result = extract_po_fields(po_text, config_df, model)
+            verification = verify_extraction(po_text, result, config_df, model)
+            result["_verification"] = verification
+            flag_count = len(verification.get("flags", []))
+            if flag_count:
+                logger.warning(f"{filename} — {flag_count} verification flag(s): {verification.get('summary')}")
             results.append(result)
             logger.info(f"{filename} — {len(result.get('line_items', []))} line item(s)")
         except Exception as e:

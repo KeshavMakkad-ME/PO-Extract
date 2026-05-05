@@ -26,6 +26,60 @@ def _post(url: str, payload: dict) -> None:
             logger.warning(f"Apps Script returned non-JSON response: {response.text[:200]}")
 
 
+def _build_verification_section(all_results: list) -> str:
+    """Build an HTML section summarising verification flags across all POs."""
+    flagged_pos = []
+    for r in all_results:
+        v = r.get("_verification", {})
+        flags = v.get("flags", [])
+        if flags:
+            po_id = r.get("invoice_number", "Unknown PO")
+            flagged_pos.append((po_id, flags, v.get("summary", "")))
+
+    if not flagged_pos:
+        return (
+            '<p style="color: green;">&#10003; <b>Verification passed</b> — '
+            'all extracted values match the source documents.</p>'
+        )
+
+    rows = ""
+    for po_id, flags, summary in flagged_pos:
+        flag_rows = "".join(
+            f"""<tr>
+                <td style="padding:4px 8px;border:1px solid #ddd;">{f.get('field', '')}</td>
+                <td style="padding:4px 8px;border:1px solid #ddd;font-family:monospace;">{f.get('extracted_value', '')}</td>
+                <td style="padding:4px 8px;border:1px solid #ddd;">{f.get('issue', '')}</td>
+            </tr>"""
+            for f in flags
+        )
+        rows += f"""
+        <div style="margin-bottom:16px;">
+          <b style="color:#c0392b;">&#9888; PO {po_id}</b>
+          <span style="color:grey;font-size:12px;"> — {summary}</span>
+          <table style="border-collapse:collapse;width:100%;margin-top:6px;font-size:13px;">
+            <thead>
+              <tr style="background:#f8d7da;">
+                <th style="padding:4px 8px;border:1px solid #ddd;text-align:left;">Field</th>
+                <th style="padding:4px 8px;border:1px solid #ddd;text-align:left;">Extracted Value</th>
+                <th style="padding:4px 8px;border:1px solid #ddd;text-align:left;">Issue</th>
+              </tr>
+            </thead>
+            <tbody>{flag_rows}</tbody>
+          </table>
+        </div>"""
+
+    total_flags = sum(len(f) for _, f, _ in flagged_pos)
+    return f"""
+    <div style="background:#fff3cd;border:1px solid #ffc107;padding:12px;border-radius:4px;margin-bottom:16px;">
+      <h4 style="margin:0 0 8px 0;color:#856404;">&#9888; Verification Warnings — {total_flags} flag(s) across {len(flagged_pos)} PO(s)</h4>
+      <p style="margin:0 0 12px 0;font-size:13px;color:#856404;">
+        Please review the flagged fields below before uploading to the GST portal.
+        Format differences are acceptable — only critical content mismatches are listed.
+      </p>
+      {rows}
+    </div>"""
+
+
 def send_invoice_email(
     xlsx_bytes: bytes,
     recipients: list[str],
@@ -49,12 +103,18 @@ def send_invoice_email(
         items_html = "".join(f"<li>{e}</li>" for e in errors)
         error_section = f"<p><b>Partial failures:</b><ul>{items_html}</ul></p>"
 
+    verification_section = _build_verification_section(all_results)
+
+    total_flags = sum(len(r.get("_verification", {}).get("flags", [])) for r in all_results)
+    subject_suffix = f" — ⚠ {total_flags} verification flag(s)" if total_flags else ""
+
     payload = {
         "to":       recipients,
-        "subject":  f"E-Invoices Ready — {po_count} POs, {line_item_count} Line Items",
+        "subject":  f"E-Invoices Ready — {po_count} POs, {line_item_count} Line Items{subject_suffix}",
         "body": f"""
             <h3>Your E-Invoice file is ready</h3>
             <p><b>{po_count}</b> POs processed with <b>{line_item_count}</b> line items.</p>
+            {verification_section}
             {error_section}
             <p>The XLSX file is attached — upload it directly to the GST portal.</p>
             <br/>
