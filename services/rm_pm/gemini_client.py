@@ -33,8 +33,7 @@ GENERAL RULES:
 - If a field is not found, return empty string "" — never null
 - Do not invent or guess values — only extract what is explicitly present
 - Dates must be formatted as DD/MM/YYYY
-- invoice_amount is the grand total of the entire invoice (all products + tax + freight)
-- godown is the consignee / ship-to company name (e.g. "AM Enterprises")
+- godown is the ship-to receiver / consignee company name (e.g. "AM Enterprises")
 - freight_charges: if the invoice has a "Transportation Charges" line, extract that amount.
   It is an invoice-level field — do NOT create a line_item for transportation charges.
 

@@ -37,7 +37,8 @@ def _process_and_email(
     voucher_type_name: str,
     purchase_ledger: str,
 ) -> None:
-    config_df = load_field_config()
+    config_df = load_field_config("field_config_rm_pm")
+    freight_df = load_field_config("field_config_freight")
     results: list     = []
     errors: list[str] = []
 
@@ -67,7 +68,7 @@ def _process_and_email(
         return
 
     try:
-        xlsx_bytes, _ = build_xlsx(results, config_df)
+        xlsx_bytes, _ = build_xlsx(results, config_df, freight_df)
         send_invoice_email(
             xlsx_bytes  = xlsx_bytes,
             recipients  = recipients,

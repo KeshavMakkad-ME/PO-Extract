@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 TEMPLATE_PATH = os.environ.get("TEMPLATE_PATH", "templates/Finance_XLSX_Templates_new_new.xlsx")
 
 
-def load_field_config() -> pd.DataFrame:
+def load_field_config(wb_name: str) -> pd.DataFrame:
     wb = openpyxl.load_workbook(TEMPLATE_PATH, read_only=True, data_only=True)
-    ws = wb["field_config_rm_pm"]
+    ws = wb[wb_name]
     rows = list(ws.iter_rows(values_only=True))
     wb.close()
     headers = [str(h) for h in rows[0]]
