@@ -6,7 +6,7 @@ from copy import deepcopy
 import openpyxl
 import pandas as pd
 
-from config.po_field_map import NUMBER_FIELDS
+from config.po.field_map import NUMBER_FIELDS
 
 logger = logging.getLogger(__name__)
 

@@ -7,9 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from api.router import router
-from core.gemini_client import get_openai_client
-from utils.gsheet import load_dispatch_options, load_state_codes
+from api.admin_router import router as admin_router
+from api.rm_pm.router import router as rm_pm_router
+from api.po.router import router as po_router
+from core.llm_client import get_openai_client
+from utils.rm_pm.gsheet import load_rm_pm_options
+from utils.po.gsheet import load_dispatch_options, load_state_codes
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,6 +27,7 @@ async def lifespan(app: FastAPI):
     app.state.model            = get_openai_client()
     app.state.state_codes      = load_state_codes()
     app.state.dispatch_options = load_dispatch_options()
+    app.state.rm_pm_options    = load_rm_pm_options()
     logger.info("Ready to serve requests")
     yield
 
@@ -37,7 +41,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router)
+app.include_router(po_router)
+app.include_router(rm_pm_router)
+app.include_router(admin_router)
 
 
 if __name__ == "__main__":

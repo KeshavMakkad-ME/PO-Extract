@@ -1,9 +1,10 @@
-import json
 import logging
 import os
 
 import pandas as pd
 from openai import OpenAI
+
+from core.llm_client import call_llm_json
 
 logger = logging.getLogger(__name__)
 
@@ -11,10 +12,6 @@ _LINE_ITEM_FIELDS = {
     "product_description", "hsn_code", "quantity", "unit_price",
     "eway_doc_no", "eway_date", "vehicle_number",
 }
-
-
-def get_openai_client() -> OpenAI:
-    return OpenAI()  # reads OPENAI_API_KEY from environment automatically
 
 
 def build_extraction_prompt(config_df: pd.DataFrame, po_text: str) -> str:
@@ -64,24 +61,10 @@ PURCHASE ORDER TEXT:
 def extract_po_fields(po_text: str, config_df: pd.DataFrame, client: OpenAI) -> dict:
     prompt = build_extraction_prompt(config_df, po_text)
     model = os.environ.get("OPENAI_MODEL", "gpt-4o")
-
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0,
-        )
-
-        raw = response.choices[0].message.content.strip()
-        data = json.loads(raw)
-        logger.info(f"Extraction successful — {len(data.get('line_items', []))} line item(s) found")
+        data = call_llm_json(prompt, client, model)
+        logger.info(f"PO extraction successful — {len(data.get('line_items', []))} line item(s)")
         return data
-
-    except json.JSONDecodeError as e:
-        logger.error(f"OpenAI returned invalid JSON: {e}")
-        raise
-
     except Exception as e:
-        logger.error(f"OpenAI API call failed: {e}")
+        logger.error(f"PO extraction failed: {e}")
         raise

@@ -1,16 +1,9 @@
 import json
-import logging
-import os
 
 import pandas as pd
-from openai import OpenAI
-
-logger = logging.getLogger(__name__)
 
 
-def _build_verification_prompt(po_text: str, extracted_data: dict, config_df: pd.DataFrame) -> str:
-    # Only verify extracted fields — derived fields are computed deterministically by code
-    # and cannot be meaningfully checked against source text by an AI
+def build_verification_prompt(po_text: str, extracted_data: dict, config_df: pd.DataFrame) -> str:
     verifiable = config_df[config_df["source"] == "extracted"]
     verifiable_names = set(verifiable["field_name"].tolist())
 
@@ -34,8 +27,16 @@ def _build_verification_prompt(po_text: str, extracted_data: dict, config_df: pd
     if items_parts:
         extracted_block += "\n\n" + "\n".join(items_parts)
 
-    return f"""You are a strict financial data auditor verifying AI-extracted Purchase Order data.
-This data will be used for Indian GST e-invoicing — accuracy is critical.
+    return f"""You are a strict financial data auditor verifying AI-extracted Purchase Order (PO) data.
+This data will be used to generate Indian GST e-invoices — every field directly affects legal tax filings.
+
+You are specifically auditing a Purchase Order. Pay close attention to:
+- invoice_number / PO number: must match digit-for-digit as printed on the PO
+- party_gstin: 15-character alphanumeric GSTIN — any single character mismatch is critical
+- invoice_date and dispatch_date: must correspond to the dates printed on the PO
+- HSN codes: must match exactly — wrong HSN codes cause GST classification errors
+- unit_price: must be the Basic Cost Price, NOT landing rate or MRP
+- Dispatch address and party address fields: verify against the "Ship To" / "Bill To" sections
 
 FIELD REFERENCE (what each field is supposed to contain):
 {field_ctx}
@@ -43,26 +44,33 @@ FIELD REFERENCE (what each field is supposed to contain):
 EXTRACTED DATA:
 {extracted_block}
 
-ORIGINAL SOURCE DOCUMENT:
+ORIGINAL PURCHASE ORDER TEXT:
 {po_text}
 
 VERIFICATION RULES:
-1. The following are all ACCEPTABLE format differences — do NOT flag them:
-   - Dates: any date extracted as DD/MM/YYYY is acceptable regardless of how the source formats it, including with time components, written months, etc.
+1. ACCEPTABLE format differences — do NOT flag:
+   - Dates reformatted to DD/MM/YYYY from any source format (including timestamps, written months)
    - Capitalisation, punctuation, extra whitespace
-   - Address/location abbreviations or common city-level variants (e.g. "Bengaluru" for "Bengaluru Urban", "Pune" for a suburb/locality within Pune district)
+   - Address abbreviations or well-known city-level variants (e.g. "Bengaluru" for "Bengaluru Urban")
    - Partial addresses that capture the essential identifying information
-2. Critical differences that MUST be flagged: a completely different number (e.g. wrong invoice number digits), a completely different name, a wrong GSTIN where individual characters differ from what is printed in the document
-3. Do NOT flag empty string values ("") — they legitimately indicate the field was not found
-4. ANTI-HALLUCINATION — most important rule: before flagging any field, you MUST quote the exact verbatim text from the source document that directly contradicts the extracted value. Include that quote in the issue field as: 'Source text: "..."'. If you cannot find and quote conflicting source text, do NOT flag it under any circumstances.
-5. Never infer what the source "should" say — only flag what it actually does say, and only when it clearly contradicts the extracted value
-6. Do NOT reason about whether dates, years, or values are plausible, real, or in the future. Your only job is text comparison. If the source says 2026 and the extraction says 2026, they match — full stop.
+2. MUST flag — critical differences:
+   - Wrong PO/invoice number digits
+   - Any character mismatch in a GSTIN
+   - Wrong HSN code
+   - A unit price that clearly differs from the Basic Cost Price printed in the PO
+3. Do NOT flag empty string values ("") — they legitimately mean the field was absent
+4. ANTI-HALLUCINATION — most important rule: before flagging any field, you MUST quote the exact
+   verbatim text from the source document that contradicts the extracted value.
+   Include it as: 'Source text: "..."'. If you cannot find and quote conflicting source text,
+   do NOT flag under any circumstances.
+5. Only flag what the document actually says — never infer or assume what it "should" say.
+6. Do NOT reason about plausibility of dates, years, or amounts. Your only job is text comparison.
 
 Return ONLY valid JSON, no explanation, no markdown:
 {{
   "passed": true,
   "flags": [],
-  "summary": "All extracted values verified against source document"
+  "summary": "All PO fields verified against source document"
 }}
 
 If issues are found:
@@ -70,50 +78,12 @@ If issues are found:
   "passed": false,
   "flags": [
     {{
-      "field": "invoice_number",
-      "extracted_value": "PO-12345",
-      "issue": "Source text: \\"P.O. Number : INV-12345\\" — different prefix, not a format difference",
+      "field": "party_gstin",
+      "extracted_value": "29AAFCG9846E1Z7",
+      "issue": "Source text: \\"GSTIN: 29AAFCG9846E1Z8\\" — last character differs",
       "severity": "critical"
     }}
   ],
   "summary": "1 critical issue found"
 }}
 """
-
-
-def verify_extraction(
-    po_text: str,
-    extracted_data: dict,
-    config_df: pd.DataFrame,
-    client: OpenAI,
-) -> dict:
-    """
-    Calls a separate AI pass to verify extracted values against the original PO text.
-    Only checks 'extracted' source fields — derived fields are computed deterministically
-    by code and cannot be meaningfully verified by AI against source text.
-    Returns a dict with keys: passed (bool|None), flags (list), summary (str).
-    """
-    prompt = _build_verification_prompt(po_text, extracted_data, config_df)
-    model = os.environ.get("VERIFIER_MODEL", "gpt-4.1")
-
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0,
-        )
-        raw = response.choices[0].message.content.strip()
-        result = json.loads(raw)
-        flag_count = len(result.get("flags", []))
-        status = "PASSED" if result.get("passed") else f"FAILED ({flag_count} flag(s))"
-        logger.info(f"Verification {status} — {result.get('summary', '')}")
-        return result
-
-    except json.JSONDecodeError as e:
-        logger.error(f"Verifier returned invalid JSON: {e}")
-        return {"passed": None, "flags": [], "summary": f"Verifier parse error: {e}"}
-
-    except Exception as e:
-        logger.error(f"Verifier API call failed: {e}")
-        return {"passed": None, "flags": [], "summary": f"Verifier error: {e}"}
