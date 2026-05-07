@@ -70,10 +70,12 @@ VERIFICATION RULES:
    do NOT flag under any circumstances.
 5. Only flag what the document actually says — never infer or assume what it "should" say.
 6. Do NOT reason about plausibility of dates, years, or amounts. Your only job is text comparison.
-7. FLAGS MUST CONTAIN ONLY REAL DISCREPANCIES — if you verified a field and it matches,
-   do NOT add it to the flags array at all. Never write an entry with words like "matches",
-   "no issue", "consistent with", or "correct" in the issue field. If a field is correct,
-   simply leave it out of flags entirely. A flag = a genuine problem only.
+7. FLAGS ARRAY = PROBLEMS ONLY. It is NOT a verification log.
+   Before writing your response, scan every entry you planned to put in flags.
+   DELETE any entry whose issue text contains "matches", "no issue", "consistent",
+   "correct", "appears under", "matching", or any synonym meaning "this is fine".
+   If that removes all entries, output "flags": [].
+   A flags entry that says anything other than a genuine problem MUST be removed.
 
 Return ONLY valid JSON, no explanation, no markdown:
 {{

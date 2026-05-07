@@ -22,6 +22,11 @@ ADDRESS RULES (Blinkit PO format):
   → ALL come from the "Delivered To" section.
 - ship_to_trade_name, ship_to_address1, ship_to_location, ship_to_pincode
   → also come from the "Delivered To" section (same location as party).
+
+ADDRESS FIELD RULES:
+- party_address1 / ship_to_address1: Combine ALL address lines from the section into ONE string,
+  excluding the company name at the top and excluding city, state, and pincode at the bottom.
+  Do NOT take only the first physical line — take everything between the company name and the city.
 """
 
 _FLIPKART_ADDRESS_GUIDANCE = """
@@ -32,6 +37,15 @@ The document has four labelled blocks: "Ship To", "Shipped From", "Bill To", "Bi
 - ship_to_gstin, ship_to_trade_name, ship_to_name, ship_to_address1, ship_to_location, ship_to_pincode
   → ALL come from the "Ship To" section ONLY.
 - "Bill From" and "Shipped From" are OUR address (the seller) — NEVER use these for party_* or ship_to_* fields.
+
+ADDRESS FIELD RULES:
+- party_address1: Combine ALL address lines from the "Bill To" section into ONE string,
+  excluding the company name at the top and excluding city, state, and pincode at the bottom.
+  Example — Bill To has: "BTM VENTURES PVT LTD, / 4th Floor, Plot 194, Road 38, Ayyapa Society, / CHENNAI - 600016"
+  → party_address1 = "4th Floor, Plot 194, Road 38, Ayyapa Society"
+- ship_to_address1: Same logic for "Ship To" — all lines except company name and city/state/pincode.
+  Example — Ship To has: "BTM VENTURES PVT LTD, / Survey 6/2C, Vampattu road, Koduvalli, / Thiruvallur Taluk, Thiruvallur district, / Chennai - 600055"
+  → ship_to_address1 = "Survey 6/2C, Vampattu road, Koduvalli, Thiruvallur Taluk, Thiruvallur district"
 """
 
 
