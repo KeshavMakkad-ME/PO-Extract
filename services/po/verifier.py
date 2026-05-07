@@ -58,6 +58,11 @@ VERIFICATION RULES:
    - Any character mismatch in a GSTIN
    - Wrong HSN code
    - A unit price that clearly differs from the Basic Cost Price printed in the PO
+   - Bill To / Ship To section mixing: if a party_* field (party_gstin, party_trade_name,
+     party_address1, party_location, party_pincode) contains a value that appears under the
+     "Ship To" heading in the source, flag it as critical — and vice versa for ship_to_* fields.
+     To check: locate the extracted value in the source text and confirm which section heading
+     ("Bill To" or "Ship To") precedes it.
 3. Do NOT flag empty string values ("") — they legitimately mean the field was absent
 4. ANTI-HALLUCINATION — most important rule: before flagging any field, you MUST quote the exact
    verbatim text from the source document that contradicts the extracted value.

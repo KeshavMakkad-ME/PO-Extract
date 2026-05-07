@@ -39,6 +39,7 @@ def _process_and_email(
     dispatch_from: dict,
     model: OpenAI,
     recipients: list[str],
+    company: str = "blinkit",
 ) -> None:
     results: list     = []
     errors: list[str] = []
@@ -51,7 +52,7 @@ def _process_and_email(
                 if ext == "pdf"
                 else extract_text_from_csv(file_bytes)
             )
-            result = extract_po_fields(po_text, config_df, model)
+            result = extract_po_fields(po_text, config_df, model, company)
             verification = verify_extraction(build_verification_prompt(po_text, result, config_df), model)
             result["_verification"] = verification
             flag_count = len(verification.get("flags", []))
@@ -146,6 +147,7 @@ async def process_files(
         dispatch_from,
         request.app.state.model,
         recipients,
+        company,
     )
 
     n = len(file_items)

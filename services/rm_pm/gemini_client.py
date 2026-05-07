@@ -98,7 +98,7 @@ INVOICE TEXT:
 
 def extract_rm_pm_fields(invoice_text: str, config_df: pd.DataFrame, client: OpenAI) -> dict:
     prompt = build_extraction_prompt(config_df, invoice_text)
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+    model = os.environ.get("OPENAI_MODEL", "gpt-4.1")
     try:
         data = call_llm_json(prompt, client, model)
         logger.info(f"RM/PM extraction successful — {len(data.get('line_items', []))} line item(s)")
