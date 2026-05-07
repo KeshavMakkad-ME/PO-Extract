@@ -88,7 +88,7 @@ async def process_services(
     files: UploadedServicesFiles,
     recipient_email: str = Form(...),
     voucher_type:    str = Form(...),
-    purchase_ledger: str = Form(...),
+    purchase_ledger: str = Form(""),
 ) -> AckResponse:
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")

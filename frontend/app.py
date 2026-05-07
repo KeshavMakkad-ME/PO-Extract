@@ -409,8 +409,6 @@ def render_services_tab():
             and recipient_email
             and recipient_email.strip()
             and voucher_type
-            and purchase_ledger
-            and purchase_ledger.strip()
         )
         if st.button(
             "Process & Email Results",
