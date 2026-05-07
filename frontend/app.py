@@ -340,6 +340,105 @@ def render_rm_pm_tab():
         _render_status_panel(prefix)
 
 
+def render_services_tab():
+    prefix = "svc"
+    _init_state(prefix)
+
+    inv_options = fetch_rm_pm_options()
+    voucher_type_names = inv_options.get("voucher_type_names", [])
+
+    left, right = st.columns([3, 2], gap="large")
+
+    with left:
+        st.subheader("Voucher Type")
+        if voucher_type_names:
+            voucher_type = st.selectbox(
+                "Voucher Type",
+                options=voucher_type_names,
+                label_visibility="collapsed",
+                key="svc_voucher_type",
+            )
+        else:
+            st.warning("Could not load voucher types — is the backend running?")
+            voucher_type = None
+
+        st.divider()
+
+        st.subheader("Purchase Ledger")
+        purchase_ledger = st.text_input(
+            "Purchase Ledger",
+            placeholder="e.g. Marketing Exp @ Facebook MC",
+            label_visibility="collapsed",
+            key="svc_purchase_ledger",
+        )
+
+        st.divider()
+
+        st.subheader("Email")
+        recipient_email = st.text_input(
+            "Send results to",
+            placeholder="you@company.com",
+            label_visibility="collapsed",
+            key="svc_email",
+        )
+
+        st.divider()
+
+        st.subheader("Upload Invoices")
+        st.caption("Service invoices (Meta Ads, cloud, etc.) — PDF only")
+        uploaded_files = st.file_uploader(
+            "Drop PDF invoices here",
+            type=["pdf"],
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+            key=f"svc_uploader_{st.session_state.svc_uploader_key}",
+        )
+
+        if uploaded_files:
+            badges = "".join(
+                f'<span class="file-pill">PDF &nbsp;{f.name}</span>'
+                for f in uploaded_files
+            )
+            st.markdown(badges, unsafe_allow_html=True)
+            st.caption(f"{len(uploaded_files)} file(s)")
+
+        st.divider()
+
+        ready = bool(
+            uploaded_files
+            and recipient_email
+            and recipient_email.strip()
+            and voucher_type
+            and purchase_ledger
+            and purchase_ledger.strip()
+        )
+        if st.button(
+            "Process & Email Results",
+            type="primary",
+            disabled=not ready or st.session_state.svc_is_loading,
+            use_container_width=True,
+            key="svc_submit",
+        ):
+            st.session_state.svc_pending_submission = {
+                "files": [(f.name, f.read(), "application/octet-stream") for f in uploaded_files],
+                "form_data": {
+                    "recipient_email": recipient_email.strip(),
+                    "voucher_type":    voucher_type,
+                    "purchase_ledger": purchase_ledger.strip(),
+                },
+                "email": recipient_email.strip(),
+                "count": len(uploaded_files),
+            }
+            st.session_state.svc_endpoint   = f"{API_URL}/services/process"
+            st.session_state.svc_is_loading = True
+            st.session_state.svc_submit_error = None
+            st.session_state.svc_uploader_key += 1
+            st.rerun()
+
+    with right:
+        _render_status_panel(prefix)
+
+
 def main():
     st.set_page_config(
         page_title="Finance Tools",
@@ -413,13 +512,16 @@ def main():
     st.title("Finance Tools")
     st.divider()
 
-    po_tab, rm_pm_tab = st.tabs(["PO → E-Invoice", "RM / PM Invoices"])
+    po_tab, rm_pm_tab, services_tab = st.tabs(["PO → E-Invoice", "RM / PM Invoices", "Services Invoices"])
 
     with po_tab:
         render_po_tab()
 
     with rm_pm_tab:
         render_rm_pm_tab()
+
+    with services_tab:
+        render_services_tab()
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ load_dotenv()
 from api.admin_router import router as admin_router
 from api.rm_pm.router import router as rm_pm_router
 from api.po.router import router as po_router
+from api.services.router import router as services_router
 from core.llm_client import get_openai_client
 from utils.rm_pm.gsheet import load_rm_pm_options
 from utils.po.gsheet import load_dispatch_options, load_state_codes
@@ -43,6 +44,7 @@ app.add_middleware(
 
 app.include_router(po_router)
 app.include_router(rm_pm_router)
+app.include_router(services_router)
 app.include_router(admin_router)
 
 
