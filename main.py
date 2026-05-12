@@ -13,7 +13,7 @@ from api.po.router import router as po_router
 from api.services.router import router as services_router
 from core.llm_client import get_openai_client
 from utils.rm_pm.gsheet import load_rm_pm_options
-from utils.po.gsheet import load_dispatch_options, load_state_codes
+from utils.po.gsheet import load_dispatch_options, load_flipkart_sku_mapping, load_state_codes
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,10 +25,11 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing — loading config, state codes, dispatch options, and OpenAI client...")
-    app.state.model            = get_openai_client()
-    app.state.state_codes      = load_state_codes()
-    app.state.dispatch_options = load_dispatch_options()
-    app.state.rm_pm_options    = load_rm_pm_options()
+    app.state.model                 = get_openai_client()
+    app.state.state_codes           = load_state_codes()
+    app.state.dispatch_options      = load_dispatch_options()
+    app.state.rm_pm_options         = load_rm_pm_options()
+    app.state.flipkart_sku_mapping  = load_flipkart_sku_mapping()
     logger.info("Ready to serve requests")
     yield
 

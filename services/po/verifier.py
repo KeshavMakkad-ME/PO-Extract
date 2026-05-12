@@ -3,7 +3,12 @@ import json
 import pandas as pd
 
 
-def build_verification_prompt(po_text: str, extracted_data: dict, config_df: pd.DataFrame) -> str:
+def build_verification_prompt(
+    po_text: str,
+    extracted_data: dict,
+    config_df: pd.DataFrame,
+    sku_mapping: dict | None = None,
+) -> str:
     verifiable = config_df[config_df["source"] == "extracted"]
     verifiable_names = set(verifiable["field_name"].tolist())
 
@@ -27,6 +32,23 @@ def build_verification_prompt(po_text: str, extracted_data: dict, config_df: pd.
     if items_parts:
         extracted_block += "\n\n" + "\n".join(items_parts)
 
+    sku_block = ""
+    if sku_mapping:
+        sku_lines = "\n".join(f"  - {sku} → {name}" for sku, name in sku_mapping.items())
+        sku_block = f"""
+FLIPKART SKU MAPPING:
+Each line item's product_description should be a Flipkart SKU that maps to an internal product name.
+The following SKUs are recognised (matching is case-insensitive):
+{sku_lines}
+
+For each line item, check:
+1. The extracted product_description is present verbatim (or case-insensitively) in the source document.
+2. The extracted product_description matches one of the known SKUs above.
+   If it does NOT match any known SKU, flag it as severity "warning" with issue:
+   "Extracted SKU '<value>' is not in the known Flipkart SKU mapping — verify it is correct or add it to the mapping."
+   (Apply ANTI-HALLUCINATION rule 4 — only flag if the value is genuinely absent from the mapping list above.)
+"""
+
     return f"""You are a strict financial data auditor verifying AI-extracted Purchase Order (PO) data.
 This data will be used to generate Indian GST e-invoices — every field directly affects legal tax filings.
 
@@ -43,7 +65,7 @@ FIELD REFERENCE (what each field is supposed to contain):
 
 EXTRACTED DATA:
 {extracted_block}
-
+{sku_block}
 ORIGINAL PURCHASE ORDER TEXT:
 {po_text}
 

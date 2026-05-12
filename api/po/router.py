@@ -40,6 +40,7 @@ def _process_and_email(
     model: OpenAI,
     recipients: list[str],
     company: str = "blinkit",
+    sku_mapping: dict | None = None,
 ) -> None:
     results: list     = []
     errors: list[str] = []
@@ -53,7 +54,7 @@ def _process_and_email(
                 else extract_text_from_csv(file_bytes)
             )
             result = extract_po_fields(po_text, config_df, model, company)
-            verification = verify_extraction(build_verification_prompt(po_text, result, config_df), model)
+            verification = verify_extraction(build_verification_prompt(po_text, result, config_df, sku_mapping=sku_mapping), model)
             result["_verification"] = verification
             flag_count = len(verification.get("flags", []))
             if flag_count:
@@ -73,12 +74,12 @@ def _process_and_email(
         return
 
     try:
-        xlsx_bytes, _ = build_xlsx(results, config_df, state_codes, dispatch_from)
+        xlsx_bytes, _, sku_errors = build_xlsx(results, config_df, state_codes, dispatch_from, sku_mapping=sku_mapping)
         send_invoice_email(
             xlsx_bytes  = xlsx_bytes,
             recipients  = recipients,
             all_results = successful,
-            errors      = errors or None,
+            errors      = (errors + sku_errors) or None,
         )
     except Exception as e:
         logger.error(f"Failed to build or email XLSX: {e}", exc_info=True)
@@ -138,6 +139,7 @@ async def process_files(
     dispatch_from = dispatch_options[dispatch_from_idx]
     recipients    = _build_recipients(recipient_email)
     config_df     = load_field_config(company)
+    sku_mapping   = request.app.state.flipkart_sku_mapping if company == "flipkart" else None
 
     background_tasks.add_task(
         _process_and_email,
@@ -148,6 +150,7 @@ async def process_files(
         request.app.state.model,
         recipients,
         company,
+        sku_mapping,
     )
 
     n = len(file_items)

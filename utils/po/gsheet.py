@@ -45,6 +45,21 @@ def load_state_codes() -> dict:
     return state_codes
 
 
+def load_flipkart_sku_mapping() -> dict[str, str]:
+    wb = openpyxl.load_workbook(TEMPLATE_PATH, read_only=True, data_only=True)
+    ws = wb["Flipkart_SKU_Mapping"]
+    mapping = {}
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row and len(row) > 2 and row[1] and row[2]:
+            sku = str(row[1]).strip()
+            name = str(row[2]).strip()
+            if sku:
+                mapping[sku.lower()] = name
+    wb.close()
+    logger.info(f"Loaded {len(mapping)} Flipkart SKU mappings")
+    return mapping
+
+
 def load_dispatch_options() -> list[dict]:
     wb = openpyxl.load_workbook(TEMPLATE_PATH, read_only=True, data_only=True)
     ws = wb["Drop down -- Keshav "]

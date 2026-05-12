@@ -71,15 +71,31 @@ def _clear_data_rows(ws, config_df: pd.DataFrame) -> None:
     logger.info(f"Cleared rows 4–{ws.max_row} in 'E Invoice' sheet")
 
 
+def _apply_sku_mapping(value: str, sku_mapping: dict) -> tuple[str, str | None]:
+    """
+    Map a Flipkart SKU to the internal product name.
+    Returns (mapped_name, None) on success or ("", error_message) on miss.
+    """
+    mapped = sku_mapping.get(str(value).strip().lower())
+    if mapped is not None:
+        logger.info(f"SKU mapped: '{value}' → '{mapped}'")
+        return mapped, None
+
+    error = f"Unknown Flipkart SKU '{value}' — not found in Flipkart_SKU_Mapping. Product description left blank."
+    logger.warning(error)
+    return "", error
+
+
 def build_xlsx(
     results: list,
     config_df: pd.DataFrame,
     state_codes: dict,
     dispatch_from: dict | None = None,
-) -> tuple[bytes, int]:
+    sku_mapping: dict | None = None,
+) -> tuple[bytes, int, list[str]]:
     """
     Loads the local XLSX template, clears existing data rows, writes extracted PO data
-    into 'E Invoice' starting at row 4, and returns the modified file as bytes.
+    into 'E Invoice' starting at row 4, and returns (file_bytes, row_count, sku_errors).
     """
     wb = openpyxl.load_workbook(TEMPLATE_PATH)
     ws = wb["E Invoice"]
@@ -88,6 +104,7 @@ def build_xlsx(
 
     dispatch_from = dispatch_from or {}
     data_rows: list[dict] = []
+    sku_errors: list[str] = []
 
     for po_result in results:
         po_result = deepcopy(po_result)
@@ -124,6 +141,10 @@ def build_xlsx(
                     value = cfg["hardcoded_value"]
                 elif source == "extracted":
                     value = item.get(field_name) or po_result.get(field_name, "")
+                    if field_name == "product_description" and sku_mapping and value:
+                        value, err = _apply_sku_mapping(value, sku_mapping)
+                        if err:
+                            sku_errors.append(err)
                 elif source == "derived":
                     value = po_result.get(field_name, "")
                 elif source == "dispatch_from":
@@ -151,4 +172,4 @@ def build_xlsx(
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    return buf.read(), len(data_rows)
+    return buf.read(), len(data_rows), sku_errors
